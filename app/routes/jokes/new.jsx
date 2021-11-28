@@ -1,125 +1,79 @@
-//import type { ActionFunction } from "remix";
-import { useActionData, redirect } from "remix";
-import { db } from "~/utils/db.server";
+import {
+  json,
+  useLoaderData,
+  useActionData,
+  useCatch,
+  Link,
+  Form,
+  redirect,
+} from 'remix'
+import {useParams} from 'react-router-dom'
+import {jokes} from '../../jokes'
 
 function validateJokeContent(content) {
-  if (content.length < 10) {
-    return `That joke is too short`;
-  }
+  if (content?.length < 4) return `That joke is too short`
 }
 
 function validateJokeName(name) {
-  if (name.length < 2) {
-    return `That joke's name is too short`;
-  }
+  if (name?.length < 2) return `That joke's name is too short`
 }
 
-// type ActionData = {
-//   formError?: string;
-//   fieldErrors?: {
-//     name: string | undefined;
-//     content: string | undefined;
-//   };
-//   fields?: {
-//     name: string;
-//     content: string;
-//   };
-// };
-
-export let action = async ({
-  request
-})
-  let form = await request.formData();
-  let name = form.get("name");
-  let content = form.get("content");
-  if (
-    typeof name !== "string" ||
-    typeof content !== "string"
-  ) {
-    return { formError: `Form not submitted correctly.` };
+export const action = async ({request}) => {
+  const requestText = await request.text()
+  const form = new URLSearchParams(requestText)
+  const joke = {
+    id: Math.random().toString(32).slice(2),
+    content: form.get('content'),
+    name: form.get('name'),
   }
-
-  let fieldErrors = {
-    name: validateJokeName(name),
-    content: validateJokeContent(content)
-  };
-  let fields = { name, content };
-  if (Object.values(fieldErrors).some(Boolean)) {
-    return { fieldErrors, fields };
+  const errors = {
+    content: validateJokeContent(joke.content),
+    name: validateJokeName(joke.name),
   }
+  if (Object.values(errors).some(Boolean)) return {errors, joke}
 
-  let joke = await db.joke.create({ data: fields });
-  return redirect(`/jokes/${joke.id}`);
-});
+  jokes.unshift(joke)
+  return redirect(`/jokes/${joke.id}`)
+}
 
-export default function NewJokeRoute() {
-  let actionData = useActionData<ActionData | undefined>();
-
+export default function JokeScreen() {
+  const data = useLoaderData()
+  const actionData = useActionData()
+  const [formValues, setFormValues] = React.useState(
+    actionData?.joke ?? {
+      name: '',
+      content: '',
+    },
+  )
+  const nameError = validateJokeName(formValues.name)
+  const contentError = validateJokeContent(formValues.content)
   return (
     <div>
       <p>Add your own hilarious joke</p>
-      <form method="post">
+      <Form
+        method="post"
+        onChange={e =>
+          setFormValues({
+            name: e.currentTarget.elements.name.value,
+            content: e.currentTarget.elements.content.value,
+          })
+        }
+      >
         <div>
           <label>
-            Name:{" "}
-            <input
-              type="text"
-              defaultValue={actionData?.fields?.name}
-              name="name"
-              aria-invalid={
-                Boolean(actionData?.fieldErrors?.name) ||
-                undefined
-              }
-              aria-describedby={
-                actionData?.fieldErrors?.name
-                  ? "name-error"
-                  : undefined
-              }
-            />
+            Name: <input defaultValue={formValues.name} name="name" />
           </label>
-          {actionData?.fieldErrors?.name ? (
-            <p
-              className="form-validation-error"
-              role="alert"
-              id="name-error"
-            >
-              {actionData.fieldErrors.name}
-            </p>
-          ) : null}
+          {nameError ? <div role="alert">{nameError}</div> : null}
         </div>
         <div>
           <label>
-            Content:{" "}
-            <textarea
-              defaultValue={actionData?.fields?.content}
-              name="content"
-              aria-invalid={
-                Boolean(actionData?.fieldErrors?.content) ||
-                undefined
-              }
-              aria-describedby={
-                actionData?.fieldErrors?.content
-                  ? "content-error"
-                  : undefined
-              }
-            />
+            Content:{' '}
+            <textarea defaultValue={formValues.content} name="content" />
           </label>
-          {actionData?.fieldErrors?.content ? (
-            <p
-              className="form-validation-error"
-              role="alert"
-              id="content-error"
-            >
-              {actionData.fieldErrors.content}
-            </p>
-          ) : null}
+          {contentError ? <div role="alert">{contentError}</div> : null}
         </div>
-        <div>
-          <button type="submit" className="button">
-            Add
-          </button>
-        </div>
-      </form>
+        <button type="submit">Add</button>
+      </Form>
     </div>
-  );
+  )
 }
